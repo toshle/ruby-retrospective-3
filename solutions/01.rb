@@ -5,11 +5,10 @@ class Integer < Numeric
   end
 
   def prime_factors
-    return [] if self.abs == 1
+    return [] if abs == 1
 
-    factor = (2..self.abs).find { |divisor| self % divisor == 0 }
-    [factor].concat((self.abs / factor).prime_factors)
-
+    factor = (2..abs).find { |divisor| self % divisor == 0 }
+    [factor].concat((abs / factor).prime_factors)
   end
 
   def harmonic
