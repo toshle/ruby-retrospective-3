@@ -1,6 +1,7 @@
 class Integer < Numeric
   def prime?
-    (2...self).map { |divisor| self % divisor != 0 }.all? if self > 0
+    return false if self < 2
+    2.upto(pred).all? { |divisor| self % divisor != 0 }
   end
 
   def prime_factors
