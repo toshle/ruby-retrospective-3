@@ -35,14 +35,10 @@ class Array
   end
 
   def combine_with(other)
-    result = []
+    min_length = [length, other.length].min
+    combined = take(min_length).zip(other.take(min_length)).flatten(1)
+    remaining  = drop(min_length) + other.drop(min_length)
 
-    if size > other.size
-      0.upto(other.size - 1).each { |i| result += [self[i]] + [other[i]] }
-      result += self.drop(result.size - 1)
-    else
-      0.upto(size - 1).each { |i| result += [self[i]] + [other[i]] }
-      result += other.drop(result.size - 1)
-    end
+    combined + remaining
   end
 end
