@@ -31,12 +31,7 @@ class Array
   end
 
   def drop_every(n)
-    result = []
-    result.replace self
-
-    (n - 1).step(result.size - 1, n - 1) { |i| result.delete_at i }
-
-    return result
+    each_slice(n).map { |slice| slice.take(n - 1) }.reduce(&:+) or []
   end
 
   def combine_with(other)
