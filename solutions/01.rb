@@ -22,14 +22,12 @@ end
 class Array
   def frequencies
     recurrences = Hash.new(0)
-
     each { |key| recurrences[key] += 1 }
-
     return recurrences
   end
 
   def average
-    inject { |sum, addition| sum + addition }.to_f  / length
+    reduce(&:+).to_f  / length unless empty?
   end
 
   def drop_every(n)
