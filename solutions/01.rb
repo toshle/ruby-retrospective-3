@@ -6,15 +6,12 @@ class Integer < Numeric
 
   def prime_factors
     return [] if abs == 1
-
     factor = (2..abs).find { |divisor| self % divisor == 0 }
     [factor].concat((abs / factor).prime_factors)
   end
 
   def harmonic
-    return 1.to_r if self == 1
-    #sum = 1 / self.to_r + 1 / (self - 1).harmonic
-    1.upto(self).inject { |sum, addition| sum.to_r + (1/addition.to_r) }
+    1.upto(self).map { |number| Rational(1, number) }.reduce(&:+)
   end
 
   def digits
