@@ -15,9 +15,7 @@ class Integer < Numeric
   end
 
   def digits
-    return [self.abs] if self.abs < 10
-
-    (self.abs / 10).digits.concat [self.abs % 10]
+    abs.to_s.chars.map(&:to_i)
   end
 end
 
