@@ -3,17 +3,17 @@ module Graphics
     attr_reader :width, :height
 
     def initialize(width, height)
-      @width = width
+      @width  = width
       @height = height
-      @canvas = Array.new(height) { Array.new(width, false) }
+      @canvas = {}
     end
 
     def set_pixel(x, y)
-      @canvas[y][x] = true
+      @canvas[[x, y]] = true
     end
 
     def pixel_at?(x, y)
-      @canvas[y][x]
+      @canvas[[x, y]]
     end
 
     def draw(figure)
@@ -21,52 +21,85 @@ module Graphics
     end
 
     def render_as(renderer)
-      renderer.render(@canvas)
+      renderer.new(self).render
     end
   end
 
   module Renderers
-    class Ascii
-      def self.render(canvas)
-        canvas.map(&:join).join("\n").gsub('true', '@').gsub('false', '-')
+    class Base
+      attr_reader :canvas
+
+      def initialize(canvas)
+        @canvas = canvas
+      end
+
+      def render
+        raise NotImplementedError
       end
     end
 
-    class Html
-      HEADER = '  <!DOCTYPE html>
-                    <html>
-                    <head>
-                      <title>Rendered Canvas</title>
-                      <style type="text/css">
-                        .canvas {
-                          font-size: 1px;
-                          line-height: 1px;
-                        }
-                        .canvas * {
-                          display: inline-block;
-                          width: 10px;
-                          height: 10px;
-                          border-radius: 5px;
-                        }
-                        .canvas i {
-                          background-color: #eee;
-                        }
-                        .canvas b {
-                          background-color: #333;
-                        }
-                      </style>
-                    </head>
-                    <body>
-                      <div class="canvas">'
+    class Ascii < Base
+      def render
+        pixels = 0.upto(canvas.height.pred).map do |y|
+          0.upto(canvas.width.pred).map do |x|
+            fill_pixel(x, y)
+          end
+        end
+        pixels.map(&:join).join("\n")
+      end
 
-      FOOTER = '    </div>
-                    </body>
-                    </html>'
+      private
 
-      def self.render(canvas)
-        HEADER +
-        canvas.map(&:join).join("<br>").gsub("true", "<b></b>")
-              .gsub("false", "<i></i>") + FOOTER
+      def fill_pixel(x, y)
+        canvas.pixel_at?(x, y) ? '@' : '-'
+      end
+    end
+
+    class Html < Ascii
+      TEMPLATE = '<!doctypehtml>
+        <html>
+        <head>
+          <title>Rendered Canvas</title>
+          <style type="text/css">
+            .canvas {
+              font-size: 1px;
+              line-height: 1px;
+            }
+            .canvas * {
+              display: inline-block;
+              width: 10px;
+              height: 10px;
+              border-radius: 5px;
+            }
+            .canvas i {
+              background-color: #eee;
+            }
+            .canvas b {
+              background-color: #333;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="canvas">
+            %s
+          </div>
+        </body>
+        </html>
+      '.freeze
+
+      def render
+        pixels = 0.upto(canvas.height.pred).map do |y|
+          0.upto(canvas.width.pred).map do |x|
+            fill_pixel(x, y)
+          end
+        end
+        TEMPLATE % pixels.map(&:join).join("<br>")
+      end
+
+      private
+
+      def fill_pixel(x, y)
+        canvas.pixel_at?(x, y) ? '<b></b>' : '<i></i>'
       end
     end
   end
@@ -83,6 +116,8 @@ module Graphics
       @x == other.x and @y == other.y
     end
 
+    alias eql? ==
+
     def draw(canvas)
       canvas.set_pixel @x, @y
     end
@@ -90,68 +125,105 @@ module Graphics
     def hash
       @x.hash + y
     end
-
-    def eql?(other)
-      hash == other.hash
-    end
   end
 
   class Line
     attr_reader :from, :to
 
     def initialize(from, to)
-      @from = from
-      @to = to
+      if from.x > to.x or (from.x == to.x and from.y > to.y)
+        @from = to
+        @to   = from
+      else
+        @from = from
+        @to   = to
+      end
     end
 
     def ==(other)
       @from == other.from and @to == other.to
     end
 
+    alias eql? ==
+
     def hash
       @from.hash + @to.hash
     end
 
-    def eql?(other)
-      hash == other.hash
-    end
-
     def draw(canvas)
-      copy_coordinates
-      while @from_x != @to_x or @from_y != @to_y
-        canvas.set_pixel(@from_x, @from_y)
-        move_to_next_point
-      end
-      canvas.set_pixel(@from_x, @from_y)
+      BresenhamRasterization.new(from.x, from.y, to.x, to.y).draw(canvas)
     end
 
-    private
-
-    def move_to_next_point
-      if 2 * @error >= -@delta_y
-        @error -= @delta_y
-        @from_x += @step_x
+    class BresenhamRasterization
+      def initialize(from_x, from_y, to_x, to_y)
+        @from_x, @from_y = from_x, from_y
+        @to_x, @to_y     = to_x, to_y
       end
-      if 2 * @error < @delta_x
-        @error += @delta_x
-        @from_y += @step_y
+
+      def draw(canvas)
+        initialize_from_and_to_coordinates
+        rotate_coordinates_by_ninety_degrees if steep_slope?
+        swap_from_and_to if @drawing_from_x > @drawing_to_x
+
+        draw_line_pixels_on canvas
       end
-    end
 
-    def copy_coordinates
-      @from_x = @from.x
-      @to_x = @to.x
-      @to_y = @to.y
-      @from_y = @from.y
-      calculate_error
-    end
+      def steep_slope?
+        (@to_y - @from_y).abs > (@to_x - @from_x).abs
+      end
 
-    def calculate_error
-      @delta_x = (@to_x - @from_x).abs
-      @delta_y = (@to_y - @from_y).abs
-      @step_x = @from_x < @to_x ? 1 : -1
-      @step_y = @from_y < @to_y ? 1 : -1
-      @error = @delta_x - @delta_y
+      def initialize_from_and_to_coordinates
+        @drawing_from_x, @drawing_from_y = @from_x, @from_y
+        @drawing_to_x, @drawing_to_y     = @to_x, @to_y
+      end
+
+      def rotate_coordinates_by_ninety_degrees
+        @drawing_from_x, @drawing_from_y = @drawing_from_y, @drawing_from_x
+        @drawing_to_x, @drawing_to_y     = @drawing_to_y, @drawing_to_x
+      end
+
+      def swap_from_and_to
+        @drawing_from_x, @drawing_to_x = @drawing_to_x, @drawing_from_x
+        @drawing_from_y, @drawing_to_y = @drawing_to_y, @drawing_from_y
+      end
+
+      def error_delta
+        delta_x = @drawing_to_x - @drawing_from_x
+        delta_y = (@drawing_to_y - @drawing_from_y).abs
+
+        delta_y.to_f / delta_x
+      end
+
+      def vertical_drawing_direction
+        @drawing_from_y < @drawing_to_y ? 1 : -1
+      end
+
+      def draw_line_pixels_on(canvas)
+        @error = 0.0
+        @y     = @drawing_from_y
+
+        @drawing_from_x.upto(@drawing_to_x).each do |x|
+          set_pixel_on canvas, x, @y
+          calculate_next_y_approximation
+        end
+      end
+
+      def calculate_next_y_approximation
+        @error += error_delta
+
+        if @error >= 0.5
+          @error -= 1.0
+          @y += vertical_drawing_direction
+        end
+      end
+
+      def set_pixel_on(canvas, x, y)
+        if steep_slope?
+          canvas.set_pixel y, x
+        else
+          canvas.set_pixel x, y
+        end
+      end
     end
   end
 
