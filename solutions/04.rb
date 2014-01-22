@@ -15,12 +15,14 @@ module Asm
     def dec(destination_register, source = 1)
       @instructions << [:'-', destination_register, source]
     end
+
+    def method_missing(method, *args)
+      method
+    end
   end
 
   module Jumps
-    def label(label_name)
-      @labels[label_name] = @instructions.length
-    end
+    JUMPS = [:jmp, :je, :jne, :jl, :jle, :jg, :jge].freeze
 
     def jmp(label)
       @instructions << [:jmp, label]
@@ -60,40 +62,53 @@ module Asm
       @instructions = []
       @labels       = {}
       @registers    = {ax: 0, bx: 0, cx: 0, dx: 0}
+      @jumped       = false
     end
 
-    def method_missing(method, *args)
-      method
+    def label(label_name)
+      @labels[label_name] = @instructions.length
     end
 
     def execute(label = 0)
-      @instructions.drop(label).each do |instruction, destination, source|
+      @instructions.drop(label).each do |instruction, target, source|
         source = @registers[source] if @registers.keys.include?(source)
-
-        if instruction == :'='
-          @registers[destination] = source
-        else
-          perform_instruction(instruction, destination, source)
-        end
-
-        break if [:jmp, :je, :jne, :jl, :jle, :jg, :jge].include?(instruction)
+        perform_instruction(instruction, target, source)
+        break if JUMPS.include?(instruction) and @jumped
       end
       @registers.to_a.map { |element| element.drop(1) }.flatten
     end
 
     private
 
-    def perform_instruction(instruction, destination, source)
-      case instruction
-        when :jmp
-          execute(@labels[destination] || destination)
-        when :cmp
-          @compare_result = @registers[destination] - source
-        when :je, :jne, :jl, :jle, :jg, :jge
-          execute(@labels[source] || source) if @compare_result.send(destination, 0)
-        else
-          @registers[destination] = @registers[destination].send(instruction, source)
+    def jump(instruction, target, source)
+      @jumped = false
+      flag = instruction == :jmp ? 0 : @compare_result
+      if flag.send(target, 0)
+        @jumped = true
+        execute(@labels[source] || source)
       end
+    end
+
+    def arithmetic(instruction, target, source)
+      instructions = [:'=', :cmp] + JUMPS
+      unless instructions.include? instruction
+        @registers[target] = @registers[target].send(instruction, source)
+      end
+    end
+
+    def compare(instruction, target, source)
+      source = @registers[source] || source
+      if instruction == :cmp
+        @compare_result = @registers[target] - source
+      end
+    end
+
+    def perform_instruction(instruction, target, source)
+      @registers[target] = source if instruction == :'='
+      compare(instruction, target, source)
+      arithmetic(instruction, target, source)
+      jump(instruction, :==, target) if instruction == :jmp
+      jump(instruction, target, source) if (JUMPS - [:jmp]).include? instruction
     end
   end
 
