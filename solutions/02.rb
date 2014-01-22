@@ -11,7 +11,7 @@ class TodoList
     @task_list.each { |task| yield task}
   end
   def filter criteria
-    TodoList.new @task_list.select(&criteria.proc).compact
+    TodoList.new @task_list.select(&criteria.criteria).compact
   end
   def adjoin other
     TodoList.new @task_list | other.task_list
@@ -31,44 +31,27 @@ class TodoList
 end
 
 class Criteria
-  include Enumerable
   attr_accessor :criteria
-
-  def initialize(value)
-    @criteria = value
+  def initialize criteria
+    @criteria = criteria
   end
-
-  def self.status(value)
-    Criteria.new([value]) if [:todo, :current, :done].include? value
+  def self.status target_status
+    new -> value { value.status == target_status }
   end
-
-  def self.priority(value)
-    Criteria.new([value]) if [:low, :normal, :high].include? value
+  def self.priority target_priority
+    new -> value { value.priority == target_priority }
   end
-
-  def self.tags(value)
-    Criteria.new([value])
+  def self.tags target_tags
+    new -> value { target_tags.size == (value.tags & target_tags).size }
   end
-
+  def & other
+    Criteria.new -> value { @criteria.call(value) & other.criteria.call(value) }
+  end
   def |(other)
-    Criteria.new([@criteria] + [other.criteria])
+    Criteria.new -> value { @criteria.call(value) | other.criteria.call(value) }
   end
-
-  def &(other)
-    Criteria.new([@criteria + other.criteria])
-  end
-
   def !
-    if Filter.contains? [:todo, :current, :done], @criteria
-      return Criteria.new(([:todo, :current, :done] - @criteria).product)
-    end
-    if Filter.contains? [:low, :normal, :high], @criteria
-      return Criteria.new(([:low, :normal, :high] - @criteria).product)
-    end
-  end
-
-  def each
-    @criteria.each { |item| yield item }
+    Criteria.new -> value { not @criteria.call(value) }
   end
 end
 
