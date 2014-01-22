@@ -17,14 +17,14 @@ end
 
 module Filter
   def filter(norm, filtered = [])
-    @list.each_with_object(norm.first) do |task, crit|
-      filtered << Filter.filtered_task(task, crit)
+    @list.each_with_object(norm.first) do |task, criteria|
+      filtered << Filter.filtered_task(task, criteria)
     end
     filtered = TodoList.new(filtered.uniq.compact)
   end
 
-  def self.filtered_task(task, crit)
-    if Filter.contains? task.task, crit
+  def self.filtered_task(task, criteria)
+    if Filter.contains? task.task, criteria
       task
     end
   end
@@ -125,26 +125,11 @@ class Criteria
 end
 
 class Task
-  include Enumerable
-  attr_accessor :task
-
-  def each
-    @task.each { |item| yield item }
-  end
-
-  def status
-    task[0]
-  end
-
-  def description
-    task[1]
-  end
-
-  def priority
-    task[2]
-  end
-
-  def tags
-    task[3]
+  attr_accessor :status, :description, :priority, :tags
+  def initialize status, description, priority, tags=nil
+    @status = status.downcase.to_sym
+    @description = description
+    @priority = priority.downcase.to_sym
+    @tags = tags.to_s.split(',').map &:strip
   end
 end
