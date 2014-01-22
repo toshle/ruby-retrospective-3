@@ -231,8 +231,13 @@ module Graphics
     attr_reader :left, :right
 
     def initialize(left, right)
-      @left = left
-      @right = right
+      if left.x > right.x or (left.x == right.x and left.y > right.y)
+        @left  = right
+        @right = left
+      else
+        @left  = left
+        @right = right
+      end
     end
 
     def top_left
@@ -252,23 +257,22 @@ module Graphics
     end
 
     def ==(other)
-      (@left == other.left and @right == other.right) or
-      (@left == other.right and @right == other.left)
+      top_left == other.top_left and bottom_right == other.bottom_right
     end
+
+    alias eql? ==
 
     def hash
       @left.hash + @right.hash
     end
 
-    def eql?(other)
-      hash == other.hash
-    end
-
     def draw(canvas)
-      Line.new(Point.new(@left.x, @left.y), Point.new(@left.x, @right.y)).draw canvas
-      Line.new(Point.new(@left.x, @right.y), Point.new(@right.x, @right.y)).draw canvas
-      Line.new(Point.new(@right.x, @right.y), Point.new(@right.x, @left.y)).draw canvas
-      Line.new(Point.new(@left.x, @left.y), Point.new(@right.x, @left.y)).draw canvas
+      [
+        Line.new(top_left, top_right),
+        Line.new(top_right, bottom_right),
+        Line.new(bottom_right, bottom_left),
+        Line.new(bottom_left, top_left),
+      ].each { |line| line.draw canvas }
     end
   end
 end
