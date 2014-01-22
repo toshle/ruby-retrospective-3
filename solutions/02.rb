@@ -1,84 +1,32 @@
-module Parser
-  def self.format(list)
-    list.map do |item|
-      item[0] = item[0].downcase.to_sym
-      item[2] = item[2].downcase.to_sym
-      item[3] = item[3].gsub(/, +/, ',').strip.split(",")
-    end
-  end
-
-  def self.create_tasks(list)
-    format(list)
-    tasks = []
-    1.upto(list.length).each { tasks << Task.new }
-    tasks.each_with_index { |item, index| item.task = list[index] }
-  end
-end
-
-module Filter
-  def filter(norm, filtered = [])
-    @list.each_with_object(norm.first) do |task, criteria|
-      filtered << Filter.filtered_task(task, criteria)
-    end
-    filtered = TodoList.new(filtered.uniq.compact)
-  end
-
-  def self.filtered_task(task, criteria)
-    if Filter.contains? task.task, criteria
-      task
-    end
-  end
-
-  def self.contains?(task, other)
-    return task.flatten.include? other if not other.kind_of? Array
-    return true if other.empty?
-    return contains? task, other.drop(1) if contains? task, other.first
-    false
-  end
-end
-
-module Statistics
-  def tasks_todo
-    reduce(0) { |memo, item| memo += item.count(:todo) }
-  end
-
-  def tasks_in_progress
-    reduce(0) { |memo, item| memo += item.count(:current) }
-  end
-
-  def tasks_completed
-    reduce(0) { |memo, item| memo += item.count(:done) }
-  end
-
-  def completed?
-    completed = true
-    each { |item| completed = item.task[0] == :done }
-    completed
-  end
-end
-
 class TodoList
+  attr_accessor :task_list
   include Enumerable
-  include Filter
-  include Statistics
-  attr_accessor :list
-
-  def initialize(value = [])
-    @list = value
+  def initialize list
+    @task_list = list
   end
-
+  def TodoList.parse text
+    new text.split("\n").map { |row| Task.new(*row.split("|").map(&:strip)) }
+  end
   def each
-    @list.each { |item| yield item }
+    @task_list.each { |task| yield task}
   end
-
-  def self.parse(text)
-    list = []
-    text.each_line { |line| list << line.gsub(/[ ]*[|][ ]*/, '|').split("|") }
-    TodoList.new(Parser.create_tasks(list))
+  def filter criteria
+    TodoList.new @task_list.select(&criteria.proc).compact
   end
-
-  def adjoin(other)
-    TodoList.new((@list + other.list).uniq { |item| item.task[1] })
+  def adjoin other
+    TodoList.new @task_list | other.task_list
+  end
+  def tasks_todo
+    @task_list.count { |task| task.status == :todo }
+  end
+  def tasks_in_progress
+    @task_list.count { |task| task.status == :current }
+  end
+  def tasks_completed
+    @task_list.count { |task| task.status == :done }
+  end
+  def completed?
+    @task_list.map { |task| task.status == :done }.all?
   end
 end
 
